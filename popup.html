@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      width: 300px;
+      margin: 0;
+      padding: 14px 16px 12px;
+      background: #17171a;
+      color: #eee;
+      font-family: "Microsoft YaHei", system-ui, sans-serif;
+      font-size: 13px;
+    }
+    h1 { font-size: 15px; margin: 0 0 10px; }
+    .row { display: flex; align-items: center; justify-content: space-between; margin: 9px 0; }
+    label { opacity: 0.85; }
+    input[type="range"] { width: 150px; accent-color: #f03; }
+    .toggle { position: relative; width: 36px; height: 20px; flex: none; }
+    .toggle input { display: none; }
+    .toggle .track {
+      position: absolute; inset: 0; border-radius: 10px; background: #3a3a3e; transition: 0.15s; cursor: pointer;
+    }
+    .toggle .track::after {
+      content: ""; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px;
+      border-radius: 50%; background: #999; transition: 0.15s;
+    }
+    .toggle input:checked + .track { background: #f03; }
+    .toggle input:checked + .track::after { left: 18px; background: #fff; }
+    button {
+      padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer;
+      background: #2a2a2e; color: #eee; font-size: 12px;
+    }
+    button:hover { background: #3a3a3e; }
+    #status { margin-top: 8px; font-size: 12px; opacity: 0.7; min-height: 16px; }
+    hr { border: none; border-top: 1px solid #2a2a2e; margin: 12px 0; }
+    .hint { font-size: 11px; opacity: 0.5; margin-top: 4px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <h1>YouTube 双语字幕</h1>
+
+  <div class="row">
+    <label>启用双语字幕</label>
+    <span class="toggle"><input type="checkbox" id="enabled"><span class="track"></span></span>
+  </div>
+  <div class="row">
+    <label>显示英文原文</label>
+    <span class="toggle"><input type="checkbox" id="showOriginal"><span class="track"></span></span>
+  </div>
+  <div class="row">
+    <label>隐藏 YouTube 原生 CC</label>
+    <span class="toggle"><input type="checkbox" id="hideNativeCC"><span class="track"></span></span>
+  </div>
+  <div class="row">
+    <label>自动点亮 CC 按钮</label>
+    <span class="toggle"><input type="checkbox" id="autoEnableCC"><span class="track"></span></span>
+  </div>
+  <div class="row">
+    <label>自动跳过广告</label>
+    <span class="toggle"><input type="checkbox" id="skipAds"><span class="track"></span></span>
+  </div>
+
+  <div class="row">
+    <label>中文字号</label>
+    <input type="range" id="fontSize" min="16" max="40" step="1">
+  </div>
+
+  <hr>
+
+  <div class="row" style="justify-content: flex-start; gap: 8px;">
+    <button id="resetPosBtn">重置字幕位置</button>
+  </div>
+  <div id="status"></div>
+  <div class="hint">翻译使用 YouTube 内置机器翻译,无需安装任何东西;拖动字幕条可调整位置。</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

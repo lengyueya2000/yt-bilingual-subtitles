@@ -1,0 +1,56 @@
+/* YouTube 双语字幕 悬浮层样式 */
+#yt-bs-overlay {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 12%;
+  z-index: 60;
+  max-width: 82%;
+  pointer-events: auto;          /* 可拖动;配合 mousedown 捕获逻辑 */
+  background: rgba(8, 8, 8, 0.72);
+  border-radius: 8px;
+  padding: 8px 16px;
+  text-align: center;
+  color: #fff;
+  font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+  line-height: 1.45;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: opacity 0.2s;
+  opacity: 1;
+}
+#yt-bs-overlay.yt-bs-hidden { opacity: 0; pointer-events: none; }
+
+#yt-bs-overlay .yt-bs-en {
+  display: block;
+  font-size: 0.72em;
+  opacity: 0.62;
+  margin-bottom: 1px;
+  font-family: Roboto, Arial, sans-serif;
+}
+#yt-bs-overlay .yt-bs-zh {
+  display: block;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+#yt-bs-overlay .yt-bs-zh.yt-bs-pending {
+  opacity: 0.55;
+  font-weight: 400;
+}
+/* 翻译中徽标 */
+#yt-bs-overlay .yt-bs-badge {
+  position: absolute;
+  top: -9px;
+  right: 8px;
+  font-size: 10px;
+  background: #f03;
+  color: #fff;
+  border-radius: 8px;
+  padding: 1px 7px;
+  display: none;
+}
+#yt-bs-overlay.yt-bs-loading .yt-bs-badge { display: inline-block; }
+
+/* 拖动时禁用过渡,防止跟手延迟 */
+#yt-bs-overlay.yt-bs-dragging { transition: none; cursor: grabbing; }
+#yt-bs-overlay.yt-bs-draggable { cursor: grab; }
