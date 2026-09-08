@@ -156,16 +156,19 @@
       // 跳广告用:直接设置 video 元素时间(广告期间播放器 API 的 seekTo 会被忽略/截断,
       // 而把广告 video 元素设越界会触发广告完成事件,播放器自动回到正片)
       try {
-        // 执行时刻二次确认仍在广告:异步排队期间广告可能已结束,
-        // 此时 video 元素已是正片,这次 seek 会把正片拉到目标位置(实测会把正片钳到片尾)
+        // 执行时刻三重校验,防止 seek 落到正片上(类名消失晚于视频源切换,单看类名不够):
+        // 1. ad-showing 仍在;2. video 时长是广告体量(<=600s,正片漏进来时拒绝);
+        // 3. 目标不超过该条广告末尾 +10s
         const mpNow = document.getElementById('movie_player');
         const stillAd = mpNow && mpNow.classList && mpNow.classList.contains('ad-showing');
         const v = stillAd ? document.querySelector('video.html5-main-video') : null;
-        if (v && isFinite(msg.arg)) {
+        const durOk = v && isFinite(v.duration) && v.duration > 0 && v.duration <= 600;
+        const argOk = durOk && isFinite(msg.arg) && msg.arg <= v.duration + 10;
+        if (v && durOk && argOk) {
           v.currentTime = msg.arg;
           payload = { ok: true };
         } else {
-          payload = { ok: false, guarded: true }; // 广告已结束,丢弃这次 seek,保护正片
+          payload = { ok: false, guarded: true }; // 校验未过(多半已是正片),丢弃,保护正片
         }
       } catch { payload = { ok: false }; }
     }

@@ -354,10 +354,10 @@ function findCurrentIdx(lines, t) {
 // 实测注意:广告期间播放器 getAdState() 仍返回 -1(不可靠),唯一权威信号是 player 的 ad-showing 类;
 // 广告期间 video.currentTime 是广告自己的时间轴,正片进度在非广告期持续记录(lastContentT)。
 const adSkip = {
-  seekTries: 0,        // seek 重试次数(在 12s 窗口内,等广告模块就绪)
   restoreAt: null,     // 广告结束后要恢复的正片进度
   lastContentT: 0,     // 非广告期记录的正片播放位置
   clickedSkip: false,  // 本条广告已点过原生"跳过"按钮
+  skipGoneAt: 0,       // 跳过按钮消失的时刻(套装广告 2/2 逐段点击用)
 };
 
 // 广告窗口 12 秒;YouTube 的"跳过"按钮本身也要约 5 秒才出现,窗口必须盖住它
@@ -384,10 +384,23 @@ function handleAd(video) {
   // 已点过原生跳过按钮:按钮点击本身会结束广告。此刻绝不能再 seek ——
   // 广告切回正片的过渡期 video 元素已是正片,duration 变成正片时长,
   // 再 seek 一次会把正片拉到末尾(实测 bug)。
-  if (adSkip.clickedSkip) return;
+  if (adSkip.clickedSkip) {
+    // 套装广告(2/2)处理:上一条点完按钮会消失;按钮重新出现视为下一条,允许再点
+    const btn = document.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern');
+    const btnVisible = btn && btn.offsetParent !== null;
+    if (btnVisible) {
+      adSkip.skipGoneAt = 0;
+    } else if (!adSkip.skipGoneAt) {
+      adSkip.skipGoneAt = Date.now();
+    } else if (Date.now() - adSkip.skipGoneAt > 1500) {
+      adSkip.clickedSkip = false; // 按钮消失超 1.5s,重置以准备下一段
+    }
+    return;
+  }
   // 优先点原生跳过按钮(出现即点,不等待)
   if (clickNativeSkipButton()) {
     adSkip.clickedSkip = true;
+    adSkip.skipGoneAt = 0;
     return;
   }
   // 按钮没出现时用 seek 越界;在 12s 窗口内每帧重试(广告模块就绪前 seek 会被忽略)
