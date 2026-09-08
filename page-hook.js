@@ -162,13 +162,11 @@
         const mpNow = document.getElementById('movie_player');
         const stillAd = mpNow && mpNow.classList && mpNow.classList.contains('ad-showing');
         const v = stillAd ? document.querySelector('video.html5-main-video') : null;
-        const durOk = v && isFinite(v.duration) && v.duration > 0 && v.duration <= 600;
-        const argOk = durOk && isFinite(msg.arg) && msg.arg <= v.duration + 10;
-        if (v && durOk && argOk) {
+        if (v && isFinite(msg.arg)) {
           v.currentTime = msg.arg;
           payload = { ok: true };
         } else {
-          payload = { ok: false, guarded: true }; // 校验未过(多半已是正片),丢弃,保护正片
+          payload = { ok: false, guarded: true };
         }
       } catch { payload = { ok: false }; }
     }
