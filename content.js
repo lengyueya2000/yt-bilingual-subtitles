@@ -354,15 +354,40 @@ function findCurrentIdx(lines, t) {
 // 实测注意:广告期间播放器 getAdState() 仍返回 -1(不可靠),唯一权威信号是 player 的 ad-showing 类;
 // 广告期间 video.currentTime 是广告自己的时间轴,正片进度在非广告期持续记录(lastContentT)。
 const adSkip = {
-  seekTries: 0,        // seek 重试次数(广告模块未就绪时稍后重试)
+  seekTries: 0,        // seek 重试次数(在 12s 窗口内,等广告模块就绪)
   restoreAt: null,     // 广告结束后要恢复的正片进度
   lastContentT: 0,     // 非广告期记录的正片播放位置
+  clickedSkip: false,  // 本条广告已点过原生"跳过"按钮
 };
+
+// 广告窗口 12 秒;YouTube 的"跳过"按钮本身也要约 5 秒才出现,窗口必须盖住它
+const AD_SEEK_WINDOW_MS = 12000;
+let adWindowStart = 0;
+
+// 有原生"跳过"按钮就直接点它(零延迟,等同用户手点,对 5 秒锁定的广告最有效)
+function clickNativeSkipButton() {
+  const btn = document.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern');
+  if (btn && btn.offsetParent !== null) {
+    btn.click();
+    return true;
+  }
+  return false;
+}
 
 function handleAd(video) {
   if (!settings.skipAds) return;
-  if (adSkip.restoreAt === null) adSkip.restoreAt = Math.max(0, adSkip.lastContentT - 0.3);
-  if (adSkip.seekTries >= 8) return; // 反复跳不动(强插广告),放弃,广告自然播完
+  if (adSkip.restoreAt === null) {
+    adSkip.restoreAt = Math.max(0, adSkip.lastContentT - 0.3);
+    adWindowStart = Date.now();
+    adSkip.clickedSkip = false;
+  }
+  // 优先点原生跳过按钮(出现即点,不等待)
+  if (!adSkip.clickedSkip && clickNativeSkipButton()) {
+    adSkip.clickedSkip = true;
+    return;
+  }
+  // 按钮没出现时用 seek 越界;在 12s 窗口内每帧重试(广告模块就绪前 seek 会被忽略)
+  if (Date.now() - adWindowStart > AD_SEEK_WINDOW_MS) return; // 跳不动(强插广告),自然播完
   adSkip.seekTries++;
   const dur = isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
   // 广告 video 的 duration 是该条广告的长度;跳到末尾之外,触发广告完成
@@ -447,9 +472,14 @@ function renderLoop() {
     const t = video.currentTime;
     adSkip.lastContentT = t; // 非广告期持续记录正片进度
     if (adSkip.restoreAt !== null) {
-      // 刚离开广告:复位状态(进度正常无需恢复;seek 成功时播放器自己回正片)
+      // 刚离开广告:复位状态;若播放器停在暂停(部分广告跳过后如此),自动恢复播放
       adSkip.restoreAt = null;
       adSkip.seekTries = 0;
+      adSkip.clickedSkip = false;
+      if (video.paused) {
+        const playPromise = video.play();
+        if (playPromise && playPromise.catch) playPromise.catch(() => {});
+      }
     }
 
     if (!settings.enabled || !state.segs.length) { updateOverlayVisibility(); return; }
