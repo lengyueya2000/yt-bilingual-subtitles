@@ -363,13 +363,24 @@ const adSkip = {
 const AD_SEEK_WINDOW_MS = 12000;
 
 // 有原生"跳过"按钮就直接点它(零延迟,等同用户手点,对 5 秒锁定的广告最有效)
+// 注意:必须派发完整事件序列(pointer/mouse/click,bubbles),YouTube 新版按钮
+// 监听的是 pointer 事件,单发 btn.click() 在部分浏览器上不生效(实测 Edge)
 function clickNativeSkipButton() {
-  const btn = document.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern');
-  if (btn && btn.offsetParent !== null) {
+  const btn = document.querySelector('.ytp-ad-skip-button, .ytp-skip-ad-button, .ytp-ad-skip-button-modern');
+  if (!btn) return false;
+  try {
+    const PointerCtor = window.PointerEvent || MouseEvent;
+    for (const [type, Ctor] of [
+      ['pointerdown', PointerCtor], ['mousedown', MouseEvent],
+      ['pointerup', PointerCtor], ['mouseup', MouseEvent],
+      ['click', MouseEvent],
+    ]) {
+      btn.dispatchEvent(new Ctor(type, { view: window, bubbles: true, cancelable: true }));
+    }
+  } catch {
     btn.click();
-    return true;
   }
-  return false;
+  return true;
 }
 
 // 策略:出现过跳过按钮的广告只走按钮(YouTube 自己处理恢复,位置永远正确);
