@@ -381,18 +381,22 @@ function handleAd(video) {
     adWindowStart = Date.now();
     adSkip.clickedSkip = false;
   }
+  // 已点过原生跳过按钮:按钮点击本身会结束广告。此刻绝不能再 seek ——
+  // 广告切回正片的过渡期 video 元素已是正片,duration 变成正片时长,
+  // 再 seek 一次会把正片拉到末尾(实测 bug)。
+  if (adSkip.clickedSkip) return;
   // 优先点原生跳过按钮(出现即点,不等待)
-  if (!adSkip.clickedSkip && clickNativeSkipButton()) {
+  if (clickNativeSkipButton()) {
     adSkip.clickedSkip = true;
     return;
   }
   // 按钮没出现时用 seek 越界;在 12s 窗口内每帧重试(广告模块就绪前 seek 会被忽略)
   if (Date.now() - adWindowStart > AD_SEEK_WINDOW_MS) return; // 跳不动(强插广告),自然播完
-  adSkip.seekTries++;
-  const dur = isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
-  // 广告 video 的 duration 是该条广告的长度;跳到末尾之外,触发广告完成
-  const target = dur > 0 ? dur + 5 : 60 * 60;
-  mainWorldCall('seekTo', target).catch(() => {});
+  const dur = isFinite(video.duration) ? video.duration : 0;
+  // 只对明显是广告的时长执行(<=10 分钟)。过渡期 duration 会变成正片时长,
+  // 这时 seek 正片会把它钳到片尾;duration 还是 NaN 时也不能用 3600 兜底(同因)。
+  if (dur <= 0 || dur > 600) return;
+  mainWorldCall('seekTo', dur + 5).catch(() => {});
 }
 
 // ---------------- 渲染 ----------------

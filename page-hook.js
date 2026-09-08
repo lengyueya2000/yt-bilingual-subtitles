@@ -156,17 +156,17 @@
       // 跳广告用:直接设置 video 元素时间(广告期间播放器 API 的 seekTo 会被忽略/截断,
       // 而把广告 video 元素设越界会触发广告完成事件,播放器自动回到正片)
       try {
-        const v = document.querySelector('video.html5-main-video');
+        // 执行时刻二次确认仍在广告:异步排队期间广告可能已结束,
+        // 此时 video 元素已是正片,这次 seek 会把正片拉到目标位置(实测会把正片钳到片尾)
+        const mpNow = document.getElementById('movie_player');
+        const stillAd = mpNow && mpNow.classList && mpNow.classList.contains('ad-showing');
+        const v = stillAd ? document.querySelector('video.html5-main-video') : null;
         if (v && isFinite(msg.arg)) {
           v.currentTime = msg.arg;
           payload = { ok: true };
         } else {
-          payload = { ok: false };
+          payload = { ok: false, guarded: true }; // 广告已结束,丢弃这次 seek,保护正片
         }
-        try {
-          const mp = document.getElementById('movie_player');
-          if (mp && typeof mp.seekTo === 'function') mp.seekTo(msg.arg, true);
-        } catch { /* 已有 video 层 seek */ }
       } catch { payload = { ok: false }; }
     }
     window.dispatchEvent(new CustomEvent('__yt_bs_ctrl_resp', {
