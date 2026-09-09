@@ -15,6 +15,37 @@ async function gtFetch(url) {
   }
 }
 
+// 受信任点击:合成 DOM 事件对 YouTube 跳过按钮无效(isTrusted=false 被忽略),
+// 唯一可靠方案是 chrome.debugger 派发真实输入事件(与用户手点同源)。
+// attach → 点击 → detach 数百毫秒完成;需要 manifest 声明 "debugger" 权限。
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg && msg.type === 'trusted-click' && Number.isFinite(msg.x) && Number.isFinite(msg.y)) {
+    const tabId = sender.tab && sender.tab.id;
+    if (tabId == null) {
+      sendResponse({ ok: false, error: 'no tab' });
+      return;
+    }
+    (async () => {
+      const target = { tabId };
+      try {
+        await chrome.debugger.attach(target, '1.3');
+        await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', {
+          type: 'mousePressed', x: msg.x, y: msg.y, button: 'left', clickCount: 1,
+        });
+        await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', {
+          type: 'mouseReleased', x: msg.x, y: msg.y, button: 'left', clickCount: 1,
+        });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: String(e && e.message || e) };
+      } finally {
+        try { await chrome.debugger.detach(target); } catch { /* 已分离 */ }
+      }
+    })().then(sendResponse);
+    return true;
+  }
+});
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === 'google-translate' && Array.isArray(msg.texts)) {
     (async () => {

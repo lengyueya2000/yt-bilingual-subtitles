@@ -44,10 +44,9 @@ function newState(videoId) {
 function resetForVideo(videoId) {
   if (state && state.videoId === videoId) return;
   state = newState(videoId);
-  // 跳广告状态跨视频复位(lastContentT 是上一个视频的进度,不能带到新视频)
-  adSkip.lastContentT = 0;
+  // 跳广告状态跨视频复位
   adSkip.windowStart = 0;
-  adSkip.lastTryAt = 0;
+  adSkip.lastTrustedClick = 0;
   updateOverlayVisibility();
 }
 
@@ -352,57 +351,44 @@ function findCurrentIdx(lines, t) {
 
 // 原理:广告开始时把广告 video 元素的播放时间设到越界,播放器视为广告放完,自动回到正片。
 // 实测注意:广告期间播放器 getAdState() 仍返回 -1(不可靠),唯一权威信号是 player 的 ad-showing 类;
-// 广告期间 video.currentTime 是广告自己的时间轴,正片进度在非广告期持续记录(lastContentT)。
+// 广告期间正片被暂停/替换,字幕覆盖层自动隐藏,跳过交给原生按钮。
 const adSkip = {
-  lastContentT: 0,   // 非广告期记录的正片播放位置(seeking 事件实时更新)
-  windowStart: 0,    // 本条广告的开始时刻
-  lastTryAt: 0,      // 上次 currentTime 跳转尝试时刻(2s 节流)
+  windowStart: 0,      // 本条广告的开始时刻(调试观察用)
+  lastTrustedClick: 0, // 上次受信任点击尝试时刻(1.5s 节流)
 };
 
 // 广告窗口 12 秒
-const AD_SEEK_WINDOW_MS = 12000;
-
-// 有原生"跳过"按钮就点它。实测(Chrome 152):合成事件(click/pointer 序列)
-// 对部分广告无效,但部分版本有效,保留——每帧都点,解锁瞬间即命中。
+// 有原生"跳过"按钮就点它。合成 DOM 事件对 YouTube 无效(isTrusted=false 被忽略,
+// 实测矩阵:click/pointer 序列/容器委托全部无效),改用 chrome.debugger 派发
+// 受信任真实点击(与用户手点同源),1.5s 节流。
 function clickNativeSkipButton() {
   const btn = document.querySelector('.ytp-ad-skip-button, .ytp-skip-ad-button, .ytp-ad-skip-button-modern');
   if (!btn) return false;
-  try {
-    const PointerCtor = window.PointerEvent || MouseEvent;
-    for (const [type, Ctor] of [
-      ['pointerdown', PointerCtor], ['mousedown', MouseEvent],
-      ['pointerup', PointerCtor], ['mouseup', MouseEvent],
-      ['click', MouseEvent],
-    ]) {
-      btn.dispatchEvent(new Ctor(type, { view: window, bubbles: true, cancelable: true }));
-    }
-  } catch {
-    btn.click();
+  const now = Date.now();
+  if (adSkip.lastTrustedClick && now - adSkip.lastTrustedClick < 1500) return true;
+  const r = btn.getBoundingClientRect();
+  if (r.width > 0 && r.height > 0) {
+    adSkip.lastTrustedClick = now;
+    chrome.runtime.sendMessage({
+      type: 'trusted-click',
+      x: Math.round(r.left + r.width / 2),
+      y: Math.round(r.top + r.height / 2),
+    }, () => void chrome.runtime.lastError);
+    return true;
   }
-  return true;
+  return false;
 }
 
 // 兜底:12s 后每 2s 把 currentTime 跳到"进广告前的正片位置"。
 // page-hook 执行侧自适应,双向安全:
 //   元素还是广告 → 目标超出广告末尾被钳到广告结尾 → 广告结束,YouTube 回正片
-//   元素已是正片(源切换先于类名摘除的竞态)→ seek 到期望位置 ≈ 无害校正
-function tryFinishAd(video) {
-  if (Date.now() - adSkip.windowStart < AD_SEEK_WINDOW_MS) return;
-  const now = Date.now();
-  if (adSkip.lastTryAt && now - adSkip.lastTryAt < 2000) return;
-  adSkip.lastTryAt = now;
-  mainWorldCall('seekTo', Math.max(0, adSkip.lastContentT - 0.3)).catch(() => {});
-}
-
 function handleAd(video) {
   if (!settings.skipAds) return;
-  installSeekWatcher(video);
   if (adSkip.windowStart === 0) {
     adSkip.windowStart = Date.now();
-    adSkip.lastTryAt = 0;
+    adSkip.lastTrustedClick = 0;
   }
-  clickNativeSkipButton(); // 每帧点:锁定态无效但无害;解锁瞬间即命中
-  tryFinishAd(video);      // 12s 后每 2s 兜底 seek
+  clickNativeSkipButton(); // 受信任点击(部分环境有效;无效时需手点,位置交给 YouTube)
 }
 
 // ---------------- 渲染 ----------------
@@ -480,11 +466,9 @@ function renderLoop() {
       return;
     }
     const t = video.currentTime;
-    installSeekWatcher(video);
-    adSkip.lastContentT = t; // 非广告期持续记录正片进度(兜底;主要靠 seeking 事件)
     if (adSkip.windowStart !== 0) {
-      // 刚离开广告:复位全部状态。seekTo 的目标就是进广告前的位置,
-      // 位置自然正确;若播放器停在暂停则补一次自动播放
+      // 刚离开广告:复位状态。正片从哪继续完全交给 YouTube(任何 seek 校正
+      // 都会触发它重新弹广告,形成循环,实测)。仅在暂停时补一次播放。
       adSkip.windowStart = 0;
       adSkip.lastTryAt = 0;
       if (video.paused) {

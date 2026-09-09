@@ -3,7 +3,10 @@
   "name": "YouTube 双语字幕",
   "version": "1.0.0",
   "description": "YouTube 双语字幕:英文原文 + YouTube 内置中文翻译。无需安装任何东西,无 API Key,零 GPU。",
-  "permissions": ["storage"],
+  "permissions": [
+    "storage",
+    "debugger"
+  ],
   "host_permissions": [
     "*://*.youtube.com/*",
     "https://translate.googleapis.com/*"
@@ -13,15 +16,26 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.youtube.com/*"],
-      "js": ["page-hook.js"],
+      "matches": [
+        "*://*.youtube.com/*"
+      ],
+      "js": [
+        "page-hook.js"
+      ],
       "run_at": "document_start",
       "world": "MAIN"
     },
     {
-      "matches": ["*://*.youtube.com/*"],
-      "js": ["lib.js", "content.js"],
-      "css": ["overlay.css"],
+      "matches": [
+        "*://*.youtube.com/*"
+      ],
+      "js": [
+        "lib.js",
+        "content.js"
+      ],
+      "css": [
+        "overlay.css"
+      ],
       "run_at": "document_idle"
     }
   ],
